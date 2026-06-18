@@ -546,6 +546,29 @@ This project is licensed under the **MIT License** — see [LICENSE](LICENSE) fo
 
 ---
 
+## 🔍 Technical Audit & Project Maturity
+
+*(Note: The following is an honest, technical breakdown of the system's current architectural state).*
+
+### What is currently fully operational?
+- **API & Networking (Production Ready):** The FastAPI backend flawlessly serves REST endpoints, WebSockets, and static assets. The ZeroMQ (`XPUB/XSUB`) broker provides lightning-fast, decentralized inter-agent messaging.
+- **Agent Framework (Production Ready):** The core agent lifecycle, subscription management, and heartbeat monitoring via the `Coordinator` are robust and fault-tolerant.
+- **Dashboard (Functional Prototype):** The standalone HTML/JS dashboard provides a beautiful, real-time visualization of the network using Leaflet.js and Chart.js.
+
+### What is partially implemented?
+- **Computer Vision Pipeline:** `YOLOv8` (detection) and `ByteTrack` (tracking, speed, direction) are fully implemented as standalone modules. However, they are currently *orphaned*—they exist in the codebase but are not yet wired into the main data flow. 
+- **Database:** SQLAlchemy models and a thread-safe `EventStore` for SQLite exist, but the API currently stores events in volatile memory arrays for speed.
+- **Multi-Agent Logic:** Agents communicate perfectly and can execute emergency overrides (e.g., Dijkstra-based routing in the `EmergencyAgent`). However, normal traffic light cycling relies on fixed timers (Webster's formula) rather than live AI inference.
+
+### What is currently simulated?
+To allow developers to test the dashboard UI and API endpoints without connecting physical cameras or running SUMO, the API ships with a built-in **Live Simulation Engine**:
+- **Dashboard Data:** Queue lengths, congestion levels, violations, and accidents are generated procedurally (e.g., using sine waves and RNG) by `api/main.py`.
+- **Reinforcement Learning:** The RL infrastructure (Ray RLlib configuration, Gymnasium environments) is stubbed. It is ready for training, but the SUMO bridge is currently bypassed.
+
+**Summary:** The project provides a highly scalable, brilliantly structured **architectural shell**. The networking, UI, and API layers are excellent. The deep AI components (Vision + RL) exist as isolated scripts that are ready to be "wired in" to replace the built-in simulation engine.
+
+---
+
 ## 👤 Author
 
 **Heet Soni**
