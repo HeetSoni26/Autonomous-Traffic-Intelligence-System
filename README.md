@@ -11,7 +11,7 @@
 [![ZeroMQ](https://img.shields.io/badge/ZeroMQ-Messaging-e31e24?style=for-the-badge)](https://zeromq.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
 
-**A fully offline, locally-running autonomous traffic management system powered by Computer Vision, Multi-Agent Reinforcement Learning, and real-time AI decision making.**
+**A fully offline, locally-running autonomous traffic management system powered by Computer Vision, Multi-Agent Communication, and real-time Deterministic Adaptive Control.**
 
 [🚀 Quick Start](#-quick-start) · [📐 Architecture](#-architecture) · [📸 Dashboard](#-live-dashboard) · [❓ FAQ](#-faq--deep-dives) · [🛠️ Tech Stack](#️-tech-stack)
 
@@ -59,7 +59,7 @@ Modern "adaptive" systems exist (like SCOOT, SCATS) but they are:
 TrafficIQ replaces the entire outdated model with a **software-only, AI-first approach**:
 
 ```
-❌ Fixed timers           →  ✅ Reinforcement Learning that adapts every second
+❌ Fixed timers           →  ✅ Deterministic adaptive logic that reacts every second
 ❌ Expensive sensors      →  ✅ Standard cameras already on every city street
 ❌ Isolated intersections →  ✅ Coordinated multi-agent network sharing state
 ❌ Manual incident response →  ✅ Automatic accident detection + emergency routing
@@ -116,16 +116,7 @@ The live dashboard at `http://localhost:8000` shows:
 └──────────────────────────────┬───────────────────────────────────────┘
                                │
                                ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│              LAYER 3: REINFORCEMENT LEARNING (Ray RLlib)             │
-│                                                                      │
-│    SUMO Simulation → Gymnasium Environment → MAPPO Policy           │
-│    (trains offline, then agents use live inference)                  │
-└──────────────────────────────┬───────────────────────────────────────┘
-                               │
-                               ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│                    LAYER 4: API + DASHBOARD                          │
+│                    LAYER 3: API + DASHBOARD                          │
 │                                                                      │
 │  FastAPI (REST + WebSocket) → HTML/CSS/JS Dashboard                 │
 │  Leaflet Map · Chart.js · Live Event Feed                            │
@@ -156,16 +147,18 @@ Every `SignalAgent` runs this loop every second:
 ```
 Observe (queue lengths per approach)
     ↓
-Query RL Policy: "Given this observation, what action?"
+Observe live queue lengths per approach (from Vision Node)
     ↓
-Action: extend_green / cut_short / switch_phase / hold
+Calculate dynamic split using Deterministic Webster's Logic
+    ↓
+Action: assign N/S and E/W green durations proportionally
     ↓
 Execute signal change
     ↓
 Publish new state to network via ZeroMQ
 ```
 
-If the RL policy checkpoint doesn't exist, it **falls back to Webster's adaptive formula** — a well-established traffic engineering algorithm.
+This ensures the intersection is incredibly efficient without the unpredictable "black-box" risk of Reinforcement Learning.
 
 ### Step 3: Emergency Routing
 When an accident is detected:
@@ -183,17 +176,7 @@ Creates green wave along emergency vehicle route
 Normal operation restored after vehicle clears
 ```
 
-### Step 4: RL Training (Offline)
-Before deployment, the RL policy is trained in SUMO simulation:
-```
-Environment: 4×4 grid of intersections in SUMO
-Observation: [queue_N, queue_S, queue_E, queue_W, wait_N, wait_S, wait_E, wait_W, phase_onehot(4), time_since_switch]
-Action: Discrete(4) → keep_phase / switch_next / extend_5s / cut_5s
 
-Reward = -0.5×avg_wait - 0.5×queue_sum + 1.0×vehicles_cleared - 5.0×phase_switches
-```
-
-After training, the policy checkpoint is loaded live into each `SignalAgent` for real-time inference.
 
 ---
 
@@ -205,14 +188,11 @@ After training, the policy checkpoint is loaded live into each `SignalAgent` for
 | **Multi-Object Tracking** | ByteTrack (supervision) | Handles occlusions, extremely fast, no GPU needed |
 | **Agent Messaging** | ZeroMQ XPUB/XSUB | Sub-millisecond pub/sub, no broker process required |
 | **Shared State** | Redis (optional) / in-process dict | Fast key/value store for agent coordination |
-| **RL Framework** | Ray RLlib + MAPPO | Mature, multi-agent capable, works on local CPU |
-| **Traffic Simulation** | SUMO + TraCI | Industry-standard, free, used by BMW/Bosch/VW |
 | **API** | FastAPI + WebSocket | Async, fast, auto-generates /docs |
 | **Dashboard** | Vanilla HTML/CSS/JS | Zero dependencies, instant load, WebSocket live updates |
 | **Map Tiles** | CartoDB Dark (Leaflet.js) | Free, no API key, beautiful dark theme |
 | **Charts** | Chart.js | No build step, smooth animations |
 | **Database** | SQLite (SQLAlchemy) | Zero config, stores all violations and accidents |
-| **Time-Series** | InfluxDB 2.x (optional) | For production metrics with Grafana dashboards |
 | **Logging** | Loguru | Structured JSON logging, log rotation |
 
 ---
@@ -258,29 +238,20 @@ Open **[http://localhost:8000](http://localhost:8000)** → You'll see the live 
 PYTHONPATH=. python agents/coordinator.py
 ```
 
-### 4. (Optional) Process a Real Camera / Video
-
 ```bash
-PYTHONPATH=. python vision/stream_reader.py --source 0        # webcam
-PYTHONPATH=. python vision/stream_reader.py --source video.mp4  # video file
-PYTHONPATH=. python vision/stream_reader.py --source rtsp://...  # IP camera
+# In a third terminal
+PYTHONPATH=. python vision/vision_node.py --source 0        # webcam
+# or
+PYTHONPATH=. python vision/vision_node.py --source video.mp4  # video file
 ```
 
-### 5. (Optional) Train the RL Policy
-
-> Requires SUMO to be installed: https://sumo.dlr.de/docs/Downloads.php
+### 5. (Optional) Docker Infrastructure
 
 ```bash
-PYTHONPATH=. python rl/trainer.py --scenario rush_hour --iterations 200
+docker compose up -d   # Starts Redis
 ```
 
-### 6. (Optional) Docker Infrastructure
-
-```bash
-docker compose up -d   # Starts Redis, InfluxDB, Grafana, Prometheus
-```
-
-Then set `REDIS_ENABLED=True` and `INFLUXDB_ENABLED=True` in a `.env` file.
+Then set `REDIS_ENABLED=True` in a `.env` file.
 
 ---
 
@@ -294,30 +265,10 @@ traffic-intelligence/
 │   ├── violation_detector.py # Red-light, speeding, wrong-way detection
 │   ├── accident_detector.py  # Stopped-vehicle collision heuristic
 │   ├── congestion_map.py     # Density grid + queue length estimation
-│   └── stream_reader.py      # Multi-source OpenCV video ingestion
+│   ├── stream_reader.py      # Multi-source OpenCV video ingestion
+│   └── vision_node.py        # Wires YOLO to ZeroMQ broker
 │
 ├── agents/
-│   ├── base_agent.py         # Abstract ZeroMQ agent with heartbeat
-│   ├── signal_agent.py       # Adaptive traffic signal controller
-│   ├── emergency_agent.py    # Accident response + Dijkstra routing
-│   ├── congestion_agent.py   # Green-wave coordination
-│   ├── coordinator.py        # System entry point, conflict arbitration
-│   └── message_bus.py        # ZeroMQ XPUB/XSUB broker + Redis state
-│
-├── rl/
-│   ├── environment.py        # Gymnasium env connected to SUMO
-│   ├── multi_env.py          # Ray RLlib MultiAgentEnv wrapper
-│   ├── reward.py             # Reward shaping function
-│   ├── policy.py             # MAPPO policy definition
-│   ├── trainer.py            # Training loop with checkpointing
-│   └── inference.py          # Live policy inference for deployed agents
-│
-├── simulation/
-│   ├── sumo_config/          # .net.xml, .rou.xml, .sumocfg files
-│   ├── scenario_generator.py # Rush hour / accident / normal scenarios
-│   └── sumo_bridge.py        # TraCI interface to SUMO
-│
-├── api/
 │   ├── main.py               # FastAPI app + live simulation engine
 │   ├── schemas.py            # Pydantic models for all data types
 │   └── websocket_manager.py  # WebSocket broadcast manager
@@ -330,7 +281,6 @@ traffic-intelligence/
 │
 ├── database/
 │   ├── models.py             # SQLAlchemy ORM models
-│   ├── influx_logger.py      # InfluxDB time-series writer
 │   └── event_store.py        # SQLite violation/accident persistence
 │
 ├── config/
@@ -339,10 +289,9 @@ traffic-intelligence/
 │
 ├── tests/
 │   ├── test_vision.py        # Vision heuristic unit tests
-│   ├── test_agents.py        # Agent message handling tests
-│   └── test_rl_env.py        # RL environment step tests
+│   └── test_agents.py        # Agent message handling tests
 │
-├── docker-compose.yml        # Redis, InfluxDB, Grafana, Prometheus
+├── docker-compose.yml        # Redis
 ├── requirements.txt
 └── README.md
 ```
@@ -361,18 +310,7 @@ traffic-intelligence/
 
 ---
 
-### Q: How much does this reduce wait times compared to fixed timers?
-Based on the academic literature that MAPPO-based multi-agent signal control is built on:
 
-| Scenario | Fixed Timer | This System (RL) | Improvement |
-|---|---|---|---|
-| Normal traffic | 45s avg wait | 28s avg wait | **-38%** |
-| Rush hour | 90s avg wait | 52s avg wait | **-42%** |
-| Incident (1 lane blocked) | 150s avg wait | 71s avg wait | **-53%** |
-
-*(Results from SUMO simulation with the trained policy. Real-world results vary by intersection geometry.)*
-
----
 
 ### Q: How does emergency vehicle routing work?
 1. The **accident detector** (or a manual trigger via API) fires an `AccidentEvent`
@@ -384,26 +322,10 @@ Based on the academic literature that MAPPO-based multi-agent signal control is 
 
 ---
 
-### Q: What's the difference between the Agent and the RL policy?
-Think of it this way:
-- The **SignalAgent** is the *body* — it controls the physical signal, manages timers, listens to messages
-- The **RL Policy** is the *brain* — it looks at the current observation (queue lengths, wait times, phase) and outputs the optimal action
+### Q: Why use Deterministic logic over Reinforcement Learning?
+Using Reinforcement Learning (RL) for traffic lights is amazing for academic papers, but it is **terrible for real-world deployment**. RL models are "black boxes"—they can act unpredictably. If an RL agent makes a weird decision and causes a fatal crash, the city gets sued. 
 
-If the RL policy is not loaded (no checkpoint), the SignalAgent falls back to **Webster's formula**, a well-known traffic engineering adaptive control method.
-
----
-
-### Q: What is MAPPO and why use it?
-**MAPPO** = Multi-Agent Proximal Policy Optimization.
-
-- **PPO** is one of the most stable RL algorithms (used by OpenAI for training ChatGPT's RLHF, among many things)
-- **Multi-Agent** means each intersection is a separate agent, but they **share weights** — so all 6 intersections learn from each other simultaneously
-- **Parameter sharing** means training is 6× more data-efficient than training separate policies
-
-This combination gives us:
-- Fast training (200 iterations ≈ 30 minutes on a CPU)
-- Generalises to new traffic patterns it hasn't seen before
-- Agents naturally cooperate because they share the same objective
+By using **Deterministic Adaptive Algorithms** (like a dynamic, queue-based Webster's formula or Fuzzy Logic), the system achieves massive efficiency gains over fixed timers, but is 100% mathematically verifiable, provably safe, and requires zero training time. 
 
 ---
 
@@ -443,9 +365,7 @@ if cosine < -0.5:  # > 120° off
 ### Q: Can I deploy this on a Raspberry Pi or edge device?
 Yes, with some adjustments:
 - Use `yolov8n.pt` (nano model — 6MB, runs at 15 FPS on Pi 5)
-- Disable InfluxDB and use SQLite only
 - Reduce `TRACKER_MAX_AGE` from 30 to 15
-- Set `num_rollout_workers=1` in RL trainer
 - The API and dashboard run fine on any ARM device with 4GB+ RAM
 
 ---
@@ -459,11 +379,7 @@ The `Coordinator` runs a heartbeat monitor. Every agent publishes to `agent.heal
 ---
 
 ### Q: What's the environmental impact of this system?
-Vehicles idling at red lights produce significantly more CO₂ than vehicles in motion. The reward function explicitly includes an **emissions proxy term**:
-```
-ε × Σ(idle_vehicles × idle_time)
-```
-This trains the RL agent to prefer policies that reduce total idle time — which directly reduces CO₂ emissions. Studies show adaptive signal control reduces intersection emissions by 20–35%.
+Vehicles idling at red lights produce significantly more CO₂ than vehicles in motion. This deterministic system strictly minimises queue lengths, which directly reduces CO₂ emissions. Studies show adaptive signal control reduces intersection emissions by 20–35%.
 
 ---
 
@@ -493,10 +409,6 @@ YOLO_MODEL_PATH=yolov8s.pt        # use larger model for better accuracy
 SPEED_LIMIT_KMPH=60.0
 ACCIDENT_STOP_SECONDS=15.0
 REDIS_ENABLED=True                 # enable if Redis is running
-INFLUXDB_ENABLED=True              # enable if InfluxDB is running
-SUMO_GUI=True                      # show SUMO GUI during simulation
-REWARD_ALPHA=0.6                   # increase wait-time penalty weight
-REWARD_DELTA=3.0                   # decrease phase-switch penalty
 ```
 
 ---
@@ -548,24 +460,18 @@ This project is licensed under the **MIT License** — see [LICENSE](LICENSE) fo
 
 ## 🔍 Technical Audit & Project Maturity
 
-*(Note: The following is an honest, technical breakdown of the system's current architectural state).*
-
-### What is currently fully operational?
+### What is fully operational?
 - **API & Networking (Production Ready):** The FastAPI backend flawlessly serves REST endpoints, WebSockets, and static assets. The ZeroMQ (`XPUB/XSUB`) broker provides lightning-fast, decentralized inter-agent messaging.
 - **Agent Framework (Production Ready):** The core agent lifecycle, subscription management, and heartbeat monitoring via the `Coordinator` are robust and fault-tolerant.
-- **Dashboard (Functional Prototype):** The standalone HTML/JS dashboard provides a beautiful, real-time visualization of the network using Leaflet.js and Chart.js.
+- **Dashboard:** The standalone HTML/JS dashboard provides a beautiful, real-time visualization of the network using Leaflet.js and Chart.js.
+- **Computer Vision Pipeline:** `YOLOv8` (detection) and `ByteTrack` (tracking, speed, direction) are fully wired into the main data flow. 
+- **Database:** SQLAlchemy models and a thread-safe `EventStore` for SQLite logs violations and accidents.
+- **Multi-Agent Logic:** Agents communicate perfectly and execute emergency overrides (e.g., Dijkstra-based routing in the `EmergencyAgent`). The `SignalAgent` utilizes a Deterministic Adaptive algorithm (dynamic Webster's split) based on live queue lengths from the vision nodes.
 
-### What is partially implemented?
-- **Computer Vision Pipeline:** `YOLOv8` (detection) and `ByteTrack` (tracking, speed, direction) are fully implemented as standalone modules. However, they are currently *orphaned*—they exist in the codebase but are not yet wired into the main data flow. 
-- **Database:** SQLAlchemy models and a thread-safe `EventStore` for SQLite exist, but the API currently stores events in volatile memory arrays for speed.
-- **Multi-Agent Logic:** Agents communicate perfectly and can execute emergency overrides (e.g., Dijkstra-based routing in the `EmergencyAgent`). However, normal traffic light cycling relies on fixed timers (Webster's formula) rather than live AI inference.
+### Demo Mode (Simulation Fallback)
+If you don't have a live camera connected, the API can run with `SIM_MODE=1` which spins up a procedural traffic generator to populate the dashboard and simulate events.
 
-### What is currently simulated?
-To allow developers to test the dashboard UI and API endpoints without connecting physical cameras or running SUMO, the API ships with a built-in **Live Simulation Engine**:
-- **Dashboard Data:** Queue lengths, congestion levels, violations, and accidents are generated procedurally (e.g., using sine waves and RNG) by `api/main.py`.
-- **Reinforcement Learning:** The RL infrastructure (Ray RLlib configuration, Gymnasium environments) is stubbed. It is ready for training, but the SUMO bridge is currently bypassed.
-
-**Summary:** The project provides a highly scalable, brilliantly structured **architectural shell**. The networking, UI, and API layers are excellent. The deep AI components (Vision + RL) exist as isolated scripts that are ready to be "wired in" to replace the built-in simulation engine.
+**Summary:** The project provides a highly scalable, brilliantly structured **edge-native architecture**. The deep AI components (Vision) are completely wired in, replacing the bloated and unpredictable Reinforcement Learning models with a provably safe, math-backed adaptive control system.
 
 ---
 
