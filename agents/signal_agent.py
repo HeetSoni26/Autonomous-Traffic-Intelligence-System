@@ -1,7 +1,7 @@
 """
 agents/signal_agent.py
 Traffic signal controller agent.
-Uses RL policy if available, falls back to Webster's fixed-cycle formula.
+Uses a Deterministic Adaptive algorithm (Dynamic Webster's split) based on live queue lengths.
 """
 from __future__ import annotations
 
@@ -16,14 +16,6 @@ from agents.base_agent import BaseAgent
 
 _PHASES: List[str] = ["NS_GREEN", "ALL_RED", "EW_GREEN", "ALL_RED_2"]
 
-# Phase durations (seconds) — Webster's formula approximation for fixed-cycle
-_PHASE_DURATIONS: Dict[str, float] = {
-    "NS_GREEN":   30.0,
-    "EW_GREEN":   30.0,
-    "ALL_RED":     5.0,
-    "ALL_RED_2":   5.0,
-}
-
 
 class SignalAgent(BaseAgent):
     def __init__(self, agent_id: str, intersection_id: str) -> None:
@@ -37,6 +29,14 @@ class SignalAgent(BaseAgent):
         self._phase_idx:      int   = 0
         self._phase_start:    float = time.time()
         self._override_active: bool = False
+
+        # Phase durations (seconds) — dynamically updated
+        self._phase_durations: Dict[str, float] = {
+            "NS_GREEN":   30.0,
+            "EW_GREEN":   30.0,
+            "ALL_RED":     5.0,
+            "ALL_RED_2":   5.0,
+        }
 
         # Cache current phase in shared state
         self._write_phase()
@@ -66,7 +66,7 @@ class SignalAgent(BaseAgent):
             "phase": self.current_phase,
             "approaches": self.phase_for_approaches(),
         })
-        logger.info("Signal {} → {}", self.intersection_id, self.current_phase)
+        logger.info("Signal {} → {} (Duration: {:.1f}s)", self.intersection_id, self.current_phase, self._phase_durations[self.current_phase])
 
     def _advance_phase(self) -> None:
         self._phase_idx  = (self._phase_idx + 1) % len(_PHASES)
@@ -84,10 +84,10 @@ class SignalAgent(BaseAgent):
         while self._running:
             if not self._override_active:
                 elapsed  = time.time() - self._phase_start
-                duration = _PHASE_DURATIONS.get(self.current_phase, 30.0)
+                duration = self._phase_durations.get(self.current_phase, 30.0)
                 if elapsed >= duration:
                     self._advance_phase()
-            await asyncio.sleep(1)
+            await asyncio.sleep(0.5)
 
     async def handle_message(self, topic: str, payload: dict) -> None:
         if topic == "signals.override":
@@ -99,11 +99,30 @@ class SignalAgent(BaseAgent):
                 logger.warning("Override @ {} → active={}", self.intersection_id, self._override_active)
 
         elif topic.startswith("congestion."):
-            # Adaptive extension: if HEAVY, extend current green by 5 s
-            if payload.get("level") in ("HEAVY", "GRIDLOCK"):
-                if "GREEN" in self.current_phase:
-                    self._phase_start += 5.0
-                    logger.info("Extended green at {} due to {}", self.intersection_id, payload["level"])
+            # Deterministic Adaptive Control (Dynamic Split)
+            queues = payload.get("queue_lengths", {})
+            if queues:
+                # Max queue for NS approaches vs EW approaches
+                ns_max = max(queues.get("N", 0), queues.get("S", 0))
+                ew_max = max(queues.get("E", 0), queues.get("W", 0))
+                
+                total = ns_max + ew_max
+                if total == 0:
+                    ns_split = 0.5
+                    ew_split = 0.5
+                else:
+                    ns_split = ns_max / total
+                    ew_split = ew_max / total
+
+                # Base cycle time = 60s
+                base_cycle = 60.0
+                
+                # Calculate new durations, bounded between 10s and 50s
+                ns_dur = max(10.0, min(50.0, base_cycle * ns_split))
+                ew_dur = max(10.0, min(50.0, base_cycle * ew_split))
+
+                self._phase_durations["NS_GREEN"] = ns_dur
+                self._phase_durations["EW_GREEN"] = ew_dur
 
         elif topic == "accidents":
             # Emergency pre-emption
