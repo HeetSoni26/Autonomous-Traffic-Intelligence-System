@@ -20,6 +20,7 @@ class ViolationEvent(Base):
     vehicle_class   = Column(String(32))
     speed           = Column(Float, nullable=True)
     confidence      = Column(Float, default=1.0)
+    license_plate   = Column(String(32), nullable=True)
     image_path      = Column(Text, nullable=True)      # optional saved frame path
 
     def __repr__(self) -> str:

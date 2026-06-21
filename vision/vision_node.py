@@ -79,7 +79,7 @@ def main():
                     directions[box.track_id] = tracker.get_direction(box.track_id)
 
             # Heuristics
-            violation_detector.check_all(tracked_boxes, speeds, directions, dummy_signal_phase)
+            violation_detector.check_all(frame, tracked_boxes, speeds, directions, dummy_signal_phase)
             accident_detector.update(tracked_boxes, speeds)
             
             # Congestion
@@ -92,7 +92,8 @@ def main():
                     "intersection_id": args.intersection,
                     "level": state.level,
                     "queue_lengths": state.queue_lengths,
-                    "total_vehicles": state.total_vehicles
+                    "total_vehicles": state.total_vehicles,
+                    "pedestrians_waiting": state.pedestrians_waiting
                 }
                 pub.send_string(f"congestion.{args.intersection} {json.dumps(payload)}")
                 last_pub_time = now

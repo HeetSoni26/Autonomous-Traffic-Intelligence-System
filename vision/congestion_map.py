@@ -16,6 +16,7 @@ class CongestionState(BaseModel):
     level: str                       # FREE | MODERATE | HEAVY | GRIDLOCK
     queue_lengths:  Dict[str, int]   # approach → count of slow vehicles
     total_vehicles: int
+    pedestrians_waiting: bool
     density_grid:   List[List[int]]  # 3×3 grid vehicle counts (top-left origin)
 
 
@@ -51,7 +52,8 @@ class CongestionMap:
         speeds : track_id → km/h
         """
         queue_lengths = {d: 0 for d in "NSEW"}
-        total = len(boxes)
+        total = len([b for b in boxes if b.class_id != 0])
+        pedestrian_count = 0
 
         # 3×3 density grid
         grid = [[0, 0, 0], [0, 0, 0], [0, 0, 0]]
@@ -61,6 +63,10 @@ class CongestionMap:
         for box in boxes:
             cx, cy = box.cx, box.cy
             spd = speeds.get(box.track_id, 0.0) if box.track_id else 0.0
+
+            if box.class_id == 0:
+                pedestrian_count += 1
+                continue
 
             # Grid cell
             col = min(int(cx / col_w), 2)
@@ -88,5 +94,6 @@ class CongestionMap:
             level=level,
             queue_lengths=queue_lengths,
             total_vehicles=total,
+            pedestrians_waiting=(pedestrian_count > 0),
             density_grid=grid,
         )

@@ -101,6 +101,7 @@ class SignalAgent(BaseAgent):
         elif topic.startswith("congestion."):
             # Deterministic Adaptive Control (Dynamic Split)
             queues = payload.get("queue_lengths", {})
+            pedestrians = payload.get("pedestrians_waiting", False)
             if queues:
                 # Max queue for NS approaches vs EW approaches
                 ns_max = max(queues.get("N", 0), queues.get("S", 0))
@@ -117,12 +118,18 @@ class SignalAgent(BaseAgent):
                 # Base cycle time = 60s
                 base_cycle = 60.0
                 
-                # Calculate new durations, bounded between 10s and 50s
-                ns_dur = max(10.0, min(50.0, base_cycle * ns_split))
-                ew_dur = max(10.0, min(50.0, base_cycle * ew_split))
+                # Minimum green time bounds
+                min_green = 20.0 if pedestrians else 10.0
+                
+                # Calculate new durations, bounded between min_green and 50s
+                ns_dur = max(min_green, min(50.0, base_cycle * ns_split))
+                ew_dur = max(min_green, min(50.0, base_cycle * ew_split))
 
                 self._phase_durations["NS_GREEN"] = ns_dur
                 self._phase_durations["EW_GREEN"] = ew_dur
+                
+                if pedestrians:
+                    logger.debug("Pedestrians detected at {}, enforcing {}s min green", self.intersection_id, min_green)
 
         elif topic == "accidents":
             # Emergency pre-emption

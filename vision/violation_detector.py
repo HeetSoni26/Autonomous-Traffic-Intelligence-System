@@ -14,6 +14,7 @@ from loguru import logger
 from config.settings import settings
 from database.event_store import event_store
 from vision.detector import BoundingBox
+from vision.anpr import ANPR
 
 
 def _parse_zone(csv: str) -> Polygon:
@@ -31,6 +32,7 @@ class ViolationDetector:
     def __init__(self, intersection_id: str, publisher=None) -> None:
         self.intersection_id = intersection_id
         self._pub = publisher  # optional ZMQ publisher socket
+        self.anpr = ANPR()
 
         # Stop-line polygons keyed by approach direction
         self._stop_lines: Dict[str, Polygon] = {
@@ -59,6 +61,7 @@ class ViolationDetector:
 
     def check_all(
         self,
+        frame:       np.ndarray,
         boxes:       List[BoundingBox],
         speeds:      Dict[int, float],       # track_id → km/h
         directions:  Dict[int, np.ndarray],  # track_id → unit vec
@@ -71,12 +74,13 @@ class ViolationDetector:
             spd = speeds.get(tid, 0.0)
             dirv = directions.get(tid, np.zeros(2))
 
-            self.check_red_light(box, signal_phase)
-            self.check_speeding(box, spd)
-            self.check_wrong_way(box, dirv)
+            self.check_red_light(frame, box, signal_phase)
+            self.check_speeding(frame, box, spd)
+            self.check_wrong_way(frame, box, dirv)
 
     def check_red_light(
         self,
+        frame: np.ndarray,
         box: BoundingBox,
         signal_phase: Dict[str, str],
     ) -> None:
@@ -86,18 +90,18 @@ class ViolationDetector:
                 key = f"{box.track_id}_red_light_{approach}"
                 if key not in self._logged:
                     self._logged.add(key)
-                    self._log_violation("RED_LIGHT", box, approach=approach)
+                    self._log_violation("RED_LIGHT", frame, box, approach=approach)
 
-    def check_speeding(self, box: BoundingBox, speed_kmh: float) -> None:
+    def check_speeding(self, frame: np.ndarray, box: BoundingBox, speed_kmh: float) -> None:
         limit = self._speed_limits.get("N", settings.SPEED_LIMIT_KMPH)
         if speed_kmh > limit + self._GRACE_KMPH:
             key = f"{box.track_id}_speeding"
             if key not in self._logged:
-                self._logged.add(key)
-                self._log_violation("SPEEDING", box, speed=speed_kmh)
+                    self._logged.add(key)
+                    self._log_violation("SPEEDING", frame, box, speed=speed_kmh)
 
     def check_wrong_way(
-        self, box: BoundingBox, direction: np.ndarray, approach: str = "N"
+        self, frame: np.ndarray, box: BoundingBox, direction: np.ndarray, approach: str = "N"
     ) -> None:
         allowed = self._allowed_dirs.get(approach, np.zeros(2))
         if np.linalg.norm(direction) > 0.3:           # moving fast enough
@@ -106,16 +110,20 @@ class ViolationDetector:
                 key = f"{box.track_id}_wrong_way"
                 if key not in self._logged:
                     self._logged.add(key)
-                    self._log_violation("WRONG_WAY", box, approach=approach)
+                    self._log_violation("WRONG_WAY", frame, box, approach=approach)
 
     # ── Internal ─────────────────────────────────────────────────
     def _log_violation(
         self,
         vtype: str,
+        frame: np.ndarray,
         box:   BoundingBox,
         approach: str = "",
         speed: Optional[float] = None,
     ) -> None:
+        # Extract License Plate if possible
+        plate = self.anpr.read_license_plate(frame, box)
+        
         event_store.store_violation(
             intersection_id=self.intersection_id,
             violation_type=vtype,
@@ -123,6 +131,7 @@ class ViolationDetector:
             vehicle_class=box.class_name,
             speed=speed,
             confidence=box.confidence,
+            license_plate=plate,
         )
         if self._pub:
             import json
@@ -132,11 +141,12 @@ class ViolationDetector:
                 "vehicle_id": box.track_id,
                 "vehicle_class": box.class_name,
                 "speed": speed,
+                "license_plate": plate,
             }
             try:
                 self._pub.send_string(f"violations {json.dumps(payload)}")
             except Exception as exc:
                 logger.warning("ZMQ publish violation failed: {}", exc)
 
-        logger.warning("{} violation — {} {} @ {}", vtype, box.class_name,
-                       box.track_id, self.intersection_id)
+        logger.warning("{} violation — {} {} @ {} [Plate: {}]", vtype, box.class_name,
+                       box.track_id, self.intersection_id, plate or "UNKNOWN")

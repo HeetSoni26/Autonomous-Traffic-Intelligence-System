@@ -34,6 +34,10 @@ from api.schemas import (
     IntersectionState, ViolationResponse,
     AccidentResponse, SignalOverrideRequest,
 )
+from pydantic import BaseModel
+class ChatRequest(BaseModel):
+    message: str
+
 from api.websocket_manager import ws_manager
 from agents.message_bus import MessageBus
 from database.event_store import event_store
@@ -246,6 +250,17 @@ def override_signal(iid: str, req: SignalOverrideRequest):
 
     return {"status": "ok", "intersection": iid, "active": req.active}
 
+
+@app.post("/chat")
+def chat_endpoint(req: ChatRequest):
+    from api.chatbot import chatbot
+    network_state = {
+        "intersections": [_get_intersection_state(i) for i in _INTERSECTIONS],
+        "violations_today": len(_violations),
+        "accidents": [a for a in _accidents if a.get("status") == "ACTIVE"]
+    }
+    reply = chatbot.chat(req.message, network_state)
+    return {"reply": reply}
 
 # ── Dashboard HTML (served at root) ──────────────────────────────────────────
 @app.get("/", response_class=HTMLResponse)
