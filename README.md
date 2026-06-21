@@ -410,12 +410,12 @@ The system provides a highly scalable, brilliantly structured edge-native archit
 
 ## Roadmap
 
-- [ ] ANPR — automatic number plate recognition for violation ticketing
-- [ ] Pedestrian crosswalk detection — extend walk phase when pedestrians are waiting
-- [ ] Mobile companion app — nearest congestion, alternate routes
-- [ ] Multi-city federation — share aggregate learning across deployments
-- [ ] LLM integration — natural language queries against live network state
-- [ ] GPIO control for real traffic light hardware on Raspberry Pi
+- [x] **ANPR** — automatic number plate recognition for violation ticketing
+- [x] **Pedestrian crosswalk detection** — extend walk phase when pedestrians are waiting
+- [ ] **Mobile companion app** — nearest congestion, alternate routes
+- [ ] **Multi-city federation** — share aggregate learning across deployments
+- [x] **LLM integration** — natural language queries against live network state
+- [ ] **GPIO control** for real traffic light hardware on Raspberry Pi
 - [ ] Custom YOLO fine-tuning on local vehicle types (auto-rickshaws, e-bikes, etc.)
 
 ---

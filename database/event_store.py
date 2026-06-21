@@ -36,6 +36,7 @@ class EventStore:
         vehicle_class: str,
         speed: Optional[float] = None,
         confidence: float = 1.0,
+        license_plate: Optional[str] = None,
         image_path: Optional[str] = None,
     ) -> None:
         session = self.Session()
@@ -47,6 +48,7 @@ class EventStore:
                 vehicle_class=vehicle_class,
                 speed=speed,
                 confidence=confidence,
+                license_plate=license_plate,
                 image_path=image_path,
             )
             session.add(event)

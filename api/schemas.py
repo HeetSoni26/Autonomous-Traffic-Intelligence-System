@@ -25,6 +25,7 @@ class ViolationResponse(BaseModel):
     violation_type:  str
     vehicle_class:   str
     speed:           Optional[float] = None
+    license_plate:   Optional[str] = None
     confidence:      float = 1.0
 
 

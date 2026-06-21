@@ -251,6 +251,39 @@
       box-shadow: 0 8px 32px rgba(0,0,0,.4) !important;
     }
     .leaflet-popup-tip { background: var(--bg2) !important; }
+
+    /* ── Chat Widget ─────────────────────────────────────────────── */
+    #chat-widget {
+      position: fixed; bottom: 20px; right: 20px; z-index: 1000;
+      width: 320px; background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+      display: flex; flex-direction: column; overflow: hidden;
+      transform: translateY(calc(100% - 46px)); transition: transform 0.3s ease;
+    }
+    #chat-widget.open { transform: translateY(0); }
+    #chat-header {
+      background: var(--bg3); padding: 12px 16px; cursor: pointer;
+      display: flex; justify-content: space-between; align-items: center;
+      font-weight: 700; font-size: 13px; border-bottom: 1px solid var(--border);
+    }
+    #chat-messages {
+      height: 300px; padding: 12px; overflow-y: auto;
+      display: flex; flex-direction: column; gap: 8px; font-size: 12px;
+    }
+    .chat-msg { padding: 8px 12px; border-radius: 8px; max-width: 85%; line-height: 1.4; }
+    .chat-msg.bot { background: var(--bg3); border: 1px solid var(--border); align-self: flex-start; }
+    .chat-msg.user { background: var(--accent); color: #fff; align-self: flex-end; }
+    #chat-input-wrap {
+      display: flex; border-top: 1px solid var(--border);
+    }
+    #chat-input {
+      flex: 1; background: transparent; border: none; color: var(--text);
+      padding: 12px; outline: none; font-size: 12px;
+    }
+    #chat-send {
+      background: transparent; border: none; color: var(--accent);
+      padding: 0 16px; cursor: pointer; font-weight: 700;
+    }
   </style>
 </head>
 <body>
@@ -332,6 +365,21 @@
     </div>
   </aside>
 
+</div>
+
+<!-- ── Chat Widget ───────────────────────────────────────────── -->
+<div id="chat-widget">
+  <div id="chat-header" onclick="document.getElementById('chat-widget').classList.toggle('open')">
+    <span>🤖 City Manager AI</span>
+    <span style="font-size:10px;color:var(--text-dim);">▲</span>
+  </div>
+  <div id="chat-messages">
+    <div class="chat-msg bot">Hello! I am your AI City Manager. Ask me anything about the live traffic state.</div>
+  </div>
+  <div id="chat-input-wrap">
+    <input type="text" id="chat-input" placeholder="Ask why an intersection is congested..." onkeypress="if(event.key==='Enter') sendChat()" />
+    <button id="chat-send" onclick="sendChat()">Send</button>
+  </div>
 </div>
 
 <script>
@@ -529,8 +577,9 @@ function processPayload(payload) {
   // New violations
   if (violations.length > lastViolationCount) {
     const v = violations[0];
+    const plateText = v.license_plate ? ` [Plate: ${v.license_plate}]` : '';
     addEvent('VIOLATION',
-      `${v.violation_type} — ${v.vehicle_class} @ ${v.intersection_id} (${v.speed ? v.speed+'km/h':'–'})`,
+      `${v.violation_type} — ${v.vehicle_class} @ ${v.intersection_id} (${v.speed ? v.speed+'km/h':'–'})${plateText}`,
       new Date(v.timestamp).toLocaleTimeString()
     );
   }
@@ -599,6 +648,32 @@ setInterval(async () => {
     processPayload({ intersections: ints, violations: viol, accidents: accs });
   } catch(e) {}
 }, 3000);
+
+// ── Chatbot Interaction ────────────────────────────────────────────────────
+async function sendChat() {
+  const input = document.getElementById('chat-input');
+  const msgText = input.value.trim();
+  if (!msgText) return;
+  
+  const msgs = document.getElementById('chat-messages');
+  msgs.innerHTML += `<div class="chat-msg user">${msgText}</div>`;
+  input.value = '';
+  msgs.scrollTop = msgs.scrollHeight;
+  
+  try {
+    const res = await fetch('/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: msgText })
+    });
+    const data = await res.json();
+    msgs.innerHTML += `<div class="chat-msg bot">${data.reply}</div>`;
+    msgs.scrollTop = msgs.scrollHeight;
+  } catch(e) {
+    msgs.innerHTML += `<div class="chat-msg bot" style="color:var(--red);">Failed to connect to City Manager.</div>`;
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+}
 </script>
 </body>
 </html>
