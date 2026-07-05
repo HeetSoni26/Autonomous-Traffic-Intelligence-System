@@ -14,6 +14,12 @@ A fully offline, locally-running traffic management system that combines compute
 
 [Quick Start](#quick-start) · [Architecture](#architecture) · [Dashboard](#dashboard) · [FAQ](#faq) · [Tech Stack](#tech-stack)
 
+---
+
+## 🏆 GitHub Badges
+
+This repository is also used for earning GitHub achievement badges.
+
 </div>
 
 ---
