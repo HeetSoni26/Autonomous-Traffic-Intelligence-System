@@ -20,6 +20,10 @@ A fully offline, locally-running traffic management system that combines compute
 
 This repository is also used for earning GitHub achievement badges.
 
+### Badges Being Earned
+- Quickdraw ✅
+- Pull Shark (in progress)
+
 </div>
 
 ---
