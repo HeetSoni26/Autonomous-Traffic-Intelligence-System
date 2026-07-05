@@ -22,7 +22,8 @@ This repository is also used for earning GitHub achievement badges.
 
 ### Badges Being Earned
 - Quickdraw ✅
-- Pull Shark (in progress)
+- Pull Shark ✅
+- Pair Extraordinaire (in progress)
 
 </div>
 
