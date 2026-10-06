@@ -28,11 +28,11 @@ class BaseAgent(ABC):
         self._ctx  = zmq.asyncio.Context.instance()
         self._bus  = MessageBus()
 
-        # PUB socket — agents publish events
+        # PUB socket: agents publish events
         self._pub: zmq.asyncio.Socket = self._ctx.socket(zmq.PUB)
         self._pub.connect(settings.ZMQ_BROKER_FRONTEND)
 
-        # SUB socket — set up in subscribe()
+        # SUB socket: set up in subscribe()
         self._sub: zmq.asyncio.Socket | None = None
 
     # ── Pub/Sub helpers ───────────────────────────────────────────
@@ -98,7 +98,7 @@ class BaseAgent(ABC):
 
     @abstractmethod
     async def _run_loop(self) -> None:
-        """Main decision/control loop — implemented by subclasses."""
+        """Main decision/control loop, implemented by subclasses."""
         ...
 
     @abstractmethod

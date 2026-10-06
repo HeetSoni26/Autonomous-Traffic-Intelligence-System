@@ -31,10 +31,10 @@ class InfluxLogger:
                 self._write_api = self._client.write_api(write_options=SYNCHRONOUS)
                 logger.info("InfluxDB connected at {}", settings.INFLUXDB_URL)
             except Exception as exc:
-                logger.warning("InfluxDB unavailable — metrics disabled: {}", exc)
+                logger.warning("InfluxDB unavailable, metrics disabled: {}", exc)
                 self._enabled = False
         else:
-            logger.info("InfluxDB disabled (INFLUXDB_ENABLED=False) — metrics skipped")
+            logger.info("InfluxDB disabled (INFLUXDB_ENABLED=False), metrics skipped")
 
     def _write(self, measurement: str, tags: Dict[str, str], fields: Dict[str, Any]) -> None:
         if not self._enabled or self._write_api is None:

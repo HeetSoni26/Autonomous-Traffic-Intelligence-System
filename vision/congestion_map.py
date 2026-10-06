@@ -26,7 +26,7 @@ class CongestionMap:
     Approach zones are simplified rectangular slabs around the intersection.
     """
 
-    # Approach zones: (x1,y1,x2,y2) — tune per deployment
+    # Approach zones: (x1,y1,x2,y2), tune per deployment
     _ZONES: Dict[str, Dict[str, int]] = {
         "N": {"x1": 200, "y1":   0, "x2": 440, "y2": 300},
         "S": {"x1": 200, "y1": 400, "x2": 440, "y2": 720},
@@ -52,7 +52,7 @@ class CongestionMap:
         speeds : track_id → km/h
         """
         queue_lengths = {d: 0 for d in "NSEW"}
-        total = len([b for b in boxes if b.class_id != 0])
+        total = len([b for b in boxes if b.class_name != "person"])
         pedestrian_count = 0
 
         # 3×3 density grid
@@ -64,7 +64,7 @@ class CongestionMap:
             cx, cy = box.cx, box.cy
             spd = speeds.get(box.track_id, 0.0) if box.track_id else 0.0
 
-            if box.class_id == 0:
+            if box.class_name == "person":
                 pedestrian_count += 1
                 continue
 

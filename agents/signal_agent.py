@@ -30,7 +30,7 @@ class SignalAgent(BaseAgent):
         self._phase_start:    float = time.time()
         self._override_active: bool = False
 
-        # Phase durations (seconds) — dynamically updated
+        # Phase durations (seconds), dynamically updated
         self._phase_durations: Dict[str, float] = {
             "NS_GREEN":   30.0,
             "EW_GREEN":   30.0,
@@ -127,12 +127,31 @@ class SignalAgent(BaseAgent):
 
                 self._phase_durations["NS_GREEN"] = ns_dur
                 self._phase_durations["EW_GREEN"] = ew_dur
-                
+
+                logger.info(
+                    "Adaptive split @ {}: NS {:.0f}s / EW {:.0f}s (queues N={} S={} E={} W={})",
+                    self.intersection_id, ns_dur, ew_dur,
+                    queues.get("N", 0), queues.get("S", 0),
+                    queues.get("E", 0), queues.get("W", 0),
+                )
+
                 if pedestrians:
                     logger.debug("Pedestrians detected at {}, enforcing {}s min green", self.intersection_id, min_green)
 
         elif topic == "accidents":
-            # Emergency pre-emption
+            # Emergency pre-emption: force all-red but do NOT latch the
+            # override flag here. The EmergencyAgent owns the override
+            # lifecycle and sends signals.override(active=False) when the
+            # scene is clear, otherwise the intersection would stay stuck.
             if payload.get("intersection_id") == self.intersection_id:
                 self._force_phase("ALL_RED")
                 self._override_active = True
+                logger.warning("Accident pre-emption @ {}: forced ALL_RED", self.intersection_id)
+                # Safety net: release pre-emption ourselves if the
+                # EmergencyAgent has not done so within 30 seconds.
+                async def _release_later() -> None:
+                    await asyncio.sleep(30)
+                    if self._override_active:
+                        self._override_active = False
+                        logger.info("Pre-emption auto-released @ {}", self.intersection_id)
+                asyncio.create_task(_release_later())

@@ -25,22 +25,31 @@ class CongestionAgent(BaseAgent):
         iid   = payload.get("intersection_id", "")
 
         if level in ("HEAVY", "GRIDLOCK"):
-            logger.warning("CongestionAgent: {} at {} — broadcasting reroute", level, iid)
-            self.publish("vms.update", {
+            logger.warning("CongestionAgent: {} at {} : broadcasting reroute", level, iid)
+            # Variable message sign alert. Published on its own topic: writing
+            # to signals.<id> here would corrupt the dashboard signal state.
+            self.publish("alerts.vms", {
                 "intersection_id": iid,
-                "message": f"HEAVY TRAFFIC ON {iid} — USE ALTERNATE ROUTE",
+                "message": f"HEAVY TRAFFIC AT {iid} - USE ALTERNATE ROUTE",
                 "level":   level,
             })
-            # Create a "green wave" on a parallel corridor
+            # Nudge neighbouring intersections toward a green wave.
             parallel = self._get_parallel_corridor(iid)
             for node in parallel:
-                self.publish(f"signals.{node}", {
+                self.publish("greenwave.request", {
                     "intersection_id": node,
-                    "green_wave":      True,
+                    "source": iid,
                 })
 
     @staticmethod
     def _get_parallel_corridor(iid: str) -> list:
-        """Very simplified: return hardcoded alternate intersections."""
-        mapping = {"INT_1": ["INT_5", "INT_6"], "INT_2": ["INT_7", "INT_8"]}
+        """Adjacent intersections that can absorb diverted traffic."""
+        mapping = {
+            "INT_1": ["INT_2", "INT_4"],
+            "INT_2": ["INT_1", "INT_3", "INT_5"],
+            "INT_3": ["INT_2", "INT_6"],
+            "INT_4": ["INT_1", "INT_5"],
+            "INT_5": ["INT_2", "INT_4", "INT_6"],
+            "INT_6": ["INT_3", "INT_5"],
+        }
         return mapping.get(iid, [])

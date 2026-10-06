@@ -10,3 +10,7 @@ yolov8*.pt
 weights/
 logs/
 .vscode/
+.venv-demo/
+*.mp4
+demo_log*.txt
+docs/.DS_Store

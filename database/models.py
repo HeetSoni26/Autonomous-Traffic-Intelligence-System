@@ -2,18 +2,22 @@
 database/models.py
 SQLAlchemy ORM models for persisting violation and accident events.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, Float, DateTime, Text
 from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
 
 
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
 class ViolationEvent(Base):
     __tablename__ = "violations"
 
     id            = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    timestamp     = Column(DateTime, default=datetime.utcnow, index=True)
+    timestamp     = Column(DateTime, default=_utcnow, index=True)
     intersection_id = Column(String(64), index=True)
     violation_type  = Column(String(32), index=True)   # RED_LIGHT | SPEEDING | WRONG_WAY
     vehicle_id      = Column(String(32))
@@ -31,7 +35,7 @@ class AccidentEvent(Base):
     __tablename__ = "accidents"
 
     id              = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    timestamp       = Column(DateTime, default=datetime.utcnow, index=True)
+    timestamp       = Column(DateTime, default=_utcnow, index=True)
     intersection_id = Column(String(64), index=True)
     severity_score  = Column(Float, default=0.5)       # 0..1
     involved_vehicles = Column(Integer, default=2)

@@ -6,7 +6,13 @@ Run with:  python -m agents.coordinator
 from __future__ import annotations
 
 import asyncio
+import sys
 import threading
+
+# Windows: the default Proactor event loop cannot read from pyzmq sockets.
+# The selector policy must be set before the loop is created.
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 from loguru import logger
 
@@ -19,7 +25,7 @@ from agents.congestion_agent import CongestionAgent
 
 
 def _start_broker_thread() -> None:
-    """Run ZMQ broker in a daemon thread — it blocks indefinitely."""
+    """Run ZMQ broker in a daemon thread (blocks indefinitely)."""
     t = threading.Thread(target=run_broker, daemon=True, name="zmq_broker")
     t.start()
     logger.info("ZMQ broker thread started")
@@ -40,10 +46,8 @@ async def main() -> None:
 
     # 2. Instantiate agents
     agents = [
-        SignalAgent("sig_agent_INT_1", "INT_1"),
-        SignalAgent("sig_agent_INT_2", "INT_2"),
-        SignalAgent("sig_agent_INT_3", "INT_3"),
-        SignalAgent("sig_agent_INT_4", "INT_4"),
+        SignalAgent(f"sig_agent_INT_{i}", f"INT_{i}") for i in range(1, 7)
+    ] + [
         EmergencyAgent("em_agent"),
         CongestionAgent("cg_agent"),
     ]

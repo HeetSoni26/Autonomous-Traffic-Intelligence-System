@@ -21,7 +21,7 @@ def setup_logging() -> None:
         format=(
             "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
             "<level>{level: <8}</level> | "
-            "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> — "
+            "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> :: "
             "<level>{message}</level>"
         ),
         level=LOG_LEVEL,
@@ -43,7 +43,7 @@ def setup_logging() -> None:
         diagnose=False,      # Don't leak sensitive data in JSON
     )
 
-    logger.info("Logging initialised — level={}", LOG_LEVEL)
+    logger.info("Logging initialised, level={}", LOG_LEVEL)
 
 
 # Auto-configure when this module is imported

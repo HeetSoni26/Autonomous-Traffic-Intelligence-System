@@ -25,7 +25,7 @@ class EventStore:
         Base.metadata.create_all(bind=self.engine)
         factory = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
         self.Session = scoped_session(factory)
-        logger.info("SQLite EventStore ready — {}", settings.DATABASE_URL)
+        logger.info("SQLite EventStore ready, {}", settings.DATABASE_URL)
 
     # ── Violations ────────────────────────────────────────────────
     def store_violation(
@@ -126,5 +126,5 @@ class EventStore:
             self.Session.remove()
 
 
-# Module-level singleton — imported everywhere
+# Module-level singleton, imported everywhere
 event_store = EventStore()

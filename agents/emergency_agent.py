@@ -18,10 +18,18 @@ class EmergencyAgent(BaseAgent):
         super().__init__(agent_id, "global")
         self.subscribe(["accidents", "emergency_vehicle_detected"])
 
-        # Road network graph (loaded from shared state / SUMO net in production)
+        # Road network graph: a 2x3 corridor grid covering all six
+        # intersections. Weights can later come from live congestion data.
         self._graph = nx.DiGraph()
-        for src, dst in [("INT_1","INT_2"),("INT_2","INT_3"),
-                         ("INT_3","INT_4"),("INT_1","INT_3")]:
+        _edges = [
+            ("INT_1", "INT_2"), ("INT_2", "INT_3"),
+            ("INT_4", "INT_5"), ("INT_5", "INT_6"),
+            ("INT_1", "INT_4"), ("INT_2", "INT_5"), ("INT_3", "INT_6"),
+            ("INT_4", "INT_1"), ("INT_5", "INT_2"), ("INT_6", "INT_3"),
+            ("INT_2", "INT_1"), ("INT_3", "INT_2"),
+            ("INT_5", "INT_4"), ("INT_6", "INT_5"),
+        ]
+        for src, dst in _edges:
             self._graph.add_edge(src, dst, weight=1)
 
     async def _run_loop(self) -> None:
@@ -36,7 +44,7 @@ class EmergencyAgent(BaseAgent):
 
     async def _respond_to_accident(self, payload: dict) -> None:
         iid = payload.get("intersection_id", "")
-        logger.warning("EmergencyAgent: accident at {} — issuing preemption", iid)
+        logger.warning("EmergencyAgent: accident at {}, issuing preemption", iid)
         self.publish("signals.override", {"intersection_id": iid, "active": True, "force_phase": "ALL_RED"})
         await asyncio.sleep(10)
         self.publish("signals.override", {"intersection_id": iid, "active": False})

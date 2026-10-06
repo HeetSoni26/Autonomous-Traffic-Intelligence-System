@@ -1,7 +1,7 @@
 """
 agents/message_bus.py
 ZeroMQ XPUB/XSUB broker + Redis shared-state helper.
-Redis is optional — gracefully no-ops when REDIS_ENABLED=False.
+Redis is optional and gracefully no-ops when REDIS_ENABLED=False.
 """
 from __future__ import annotations
 
@@ -33,10 +33,10 @@ class RedisState:
                 self._r.ping()
                 logger.info("Redis connected at {}:{}", settings.REDIS_HOST, settings.REDIS_PORT)
             except Exception as exc:
-                logger.warning("Redis unavailable — shared state disabled: {}", exc)
+                logger.warning("Redis unavailable, shared state disabled: {}", exc)
                 self._r = None
         else:
-            logger.info("Redis disabled (REDIS_ENABLED=False) — using in-process dict")
+            logger.info("Redis disabled (REDIS_ENABLED=False), using in-process dict")
         # In-process fallback store
         self._local: dict = {}
 
@@ -65,7 +65,7 @@ class RedisState:
 
 def run_broker() -> None:
     """
-    XSUB/XPUB proxy — run in a daemon thread so publishers and subscribers
+    XSUB/XPUB proxy, run in a daemon thread so publishers and subscribers
     can connect through a single rendezvous point.
     """
     ctx = zmq.Context.instance()
@@ -74,7 +74,7 @@ def run_broker() -> None:
 
     frontend.bind(settings.ZMQ_BROKER_FRONTEND)
     backend.bind(settings.ZMQ_BROKER_BACKEND)
-    logger.info("ZMQ broker started — FE={} BE={}",
+    logger.info("ZMQ broker started, FE={} BE={}",
                 settings.ZMQ_BROKER_FRONTEND, settings.ZMQ_BROKER_BACKEND)
     try:
         zmq.proxy(frontend, backend)   # blocks forever

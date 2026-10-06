@@ -55,7 +55,7 @@ class Detector:
         self.model = YOLO(model_path)
         self._executor = ThreadPoolExecutor(max_workers=4,
                                             thread_name_prefix="yolo_worker")
-        logger.info("Detector ready — target classes: {}", list(_CLASS_NAMES.values()))
+        logger.info("Detector ready, target classes: {}", list(_CLASS_NAMES.values()))
 
     # ── Single-frame inference ─────────────────────────────────────
     def detect(self, frame: np.ndarray) -> List[BoundingBox]:

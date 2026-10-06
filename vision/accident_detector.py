@@ -78,6 +78,7 @@ class AccidentDetector:
         # Auto-clear if the stopped cluster has resolved
         if self._active_accident and len(abnormally_stopped) == 0:
             self._active_accident = False
+            self._publish_clear()
 
         return False
 
@@ -101,6 +102,16 @@ class AccidentDetector:
                 logger.warning("ZMQ publish accident failed: {}", exc)
 
         logger.error(
-            "ACCIDENT detected @ {} — severity={:.2f} vehicles={}",
+            "ACCIDENT detected @ {}, severity={:.2f} vehicles={}",
             self.intersection_id, severity, n_vehicles,
         )
+
+    def _publish_clear(self) -> None:
+        """Notify the network that the accident at this intersection cleared."""
+        payload = {"intersection_id": self.intersection_id}
+        if self._pub:
+            try:
+                self._pub.send_string(f"accident_cleared {json.dumps(payload)}")
+            except Exception as exc:
+                logger.warning("ZMQ publish accident clear failed: {}", exc)
+        logger.info("ACCIDENT cleared @ {}", self.intersection_id)

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>🚦 Traffic Intelligence Dashboard</title>
 
-  <!-- Leaflet.js (free OSM map — no API key needed) -->
+  <!-- Leaflet.js (keyless OpenStreetMap tiles, dark themed via CSS) -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
@@ -162,6 +162,8 @@
     #map-wrap { position: relative; overflow: hidden; }
     #map { width: 100%; height: 100%; }
     .leaflet-container { background: #0a0e1a !important; }
+    /* Dark-theme the keyless OSM raster tiles */
+    .leaflet-tile { filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.92) saturate(0.65); }
     #map-overlay {
       position: absolute; top: 12px; right: 12px; z-index: 500;
       background: rgba(10,14,26,.85); border: 1px solid var(--border);
@@ -169,6 +171,34 @@
     }
     .legend-row { display: flex; align-items: center; gap: 8px; margin: 3px 0; }
     .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+    /* ── View tabs + Live Intersection stage ─────────────────────── */
+    #view-tabs {
+      position: absolute; top: 12px; left: 12px; z-index: 600;
+      display: flex; gap: 6px;
+    }
+    .view-tab {
+      background: rgba(10,14,26,.9); border: 1px solid var(--border);
+      color: var(--text-dim); border-radius: 8px; padding: 7px 14px;
+      font-size: 12px; font-weight: 600; cursor: pointer; transition: all .2s;
+      font-family: 'Inter', sans-serif;
+    }
+    .view-tab:hover { border-color: var(--accent); color: var(--text); }
+    .view-tab.active { border-color: var(--accent); color: var(--accent); background: #0f1e38; }
+
+    #stage-wrap {
+      position: absolute; inset: 0; display: none;
+      background: #0c111d;
+    }
+    #stage-wrap.active { display: block; }
+    #stage { width: 100%; height: 100%; display: block; }
+    #stage-hint {
+      position: absolute; bottom: 12px; right: 12px; z-index: 500;
+      background: rgba(10,14,26,.85); border: 1px solid var(--border);
+      border-radius: 10px; padding: 8px 12px; font-size: 11px; color: var(--text-dim);
+      max-width: 260px; line-height: 1.5;
+    }
+    #stage-hint b { color: var(--text); }
 
     /* ── Right panel ─────────────────────────────────────────────── */
     #right-panel {
@@ -309,32 +339,44 @@
     <div id="kpi-row">
       <div class="kpi-card blue">
         <div class="kpi-label">Throughput</div>
-        <div class="kpi-value" id="kpi-throughput">—</div>
+        <div class="kpi-value" id="kpi-throughput">...</div>
         <div class="kpi-sub">vehicles / hour</div>
         <div class="kpi-icon">🚗</div>
       </div>
       <div class="kpi-card green">
         <div class="kpi-label">Avg Wait Time</div>
-        <div class="kpi-value" id="kpi-wait">—</div>
+        <div class="kpi-value" id="kpi-wait">...</div>
         <div class="kpi-sub">seconds per vehicle</div>
         <div class="kpi-icon">⏱</div>
       </div>
       <div class="kpi-card red">
         <div class="kpi-label">Active Accidents</div>
-        <div class="kpi-value" id="kpi-accidents">—</div>
+        <div class="kpi-value" id="kpi-accidents">...</div>
         <div class="kpi-sub" id="kpi-accidents-sub">monitoring all intersections</div>
         <div class="kpi-icon">🚨</div>
       </div>
       <div class="kpi-card yellow">
         <div class="kpi-label">Violations Today</div>
-        <div class="kpi-value" id="kpi-violations">—</div>
+        <div class="kpi-value" id="kpi-violations">...</div>
         <div class="kpi-sub">across network</div>
         <div class="kpi-icon">⚠️</div>
       </div>
     </div>
 
     <div id="map-wrap">
+      <div id="view-tabs">
+        <button class="view-tab active" data-view="map" onclick="switchView('map')">Network Map</button>
+        <button class="view-tab" data-view="stage" onclick="switchView('stage')">Live Intersection</button>
+      </div>
       <div id="map"></div>
+      <div id="stage-wrap">
+        <canvas id="stage"></canvas>
+        <div id="stage-hint">
+          Cars on each approach match the <b>live queue lengths</b> from the
+          ZeroMQ bus. They only cross when the adaptive controller shows
+          <b>GREEN</b>. Click an intersection in the sidebar to inspect it.
+        </div>
+      </div>
       <div id="map-overlay">
         <div style="font-size:11px;font-weight:700;margin-bottom:6px;color:#94a3b8;">CONGESTION</div>
         <div class="legend-row"><div class="legend-dot FREE"></div> Free Flow</div>
@@ -386,7 +428,7 @@
 // ── Map setup ──────────────────────────────────────────────────────────────
 const map = L.map('map', { zoomControl: false, attributionControl: false }).setView([19.078, 72.882], 14);
 
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19
 }).addTo(map);
 
@@ -508,12 +550,31 @@ function updateIntList(intersections) {
     </div>`).join('');
 }
 
+let selectedIntersection = 'INT_1';
+
 function focusInt(id) {
+  selectedIntersection = id;
   document.querySelectorAll('.int-card').forEach(c => c.classList.remove('selected'));
   const card = document.getElementById('card-'+id);
   if (card) card.classList.add('selected');
   const m = markers[id];
   if (m) { map.setView(m.getLatLng(), 15, { animate: true }); m.openPopup(); }
+  if (window.TrafficStage) TrafficStage.setSelected(id);
+}
+
+function switchView(view) {
+  document.querySelectorAll('.view-tab').forEach(t =>
+    t.classList.toggle('active', t.dataset.view === view));
+  document.getElementById('map').style.display = view === 'map' ? 'block' : 'none';
+  document.getElementById('map-overlay').style.display = view === 'map' ? 'block' : 'none';
+  document.getElementById('stage-wrap').classList.toggle('active', view === 'stage');
+  if (view === 'stage') {
+    window.TrafficStage.setSelected(selectedIntersection);
+    window.TrafficStage.show();
+  } else {
+    map.invalidateSize();   // Leaflet must re-measure after being hidden
+    if (window.TrafficStage) TrafficStage.hide();
+  }
 }
 
 // ── Signal phases grid ─────────────────────────────────────────────────────
@@ -551,17 +612,15 @@ function renderEventLog() {
     </div>`).join('');
 }
 
-let lastViolationCount = 0;
-let lastAccidentCount  = 0;
-
 function processPayload(payload) {
-  const { intersections, violations, accidents } = payload;
+  const { intersections, violations, accidents, alerts } = payload;
 
   // Update everything
   updateMarkers(intersections);
   updateIntList(intersections);
   updateQueueChart(intersections);
   updateSignalGrid(intersections);
+  if (window.TrafficStage) TrafficStage.update(intersections);
 
   // KPIs from /stats (called separately)
   const totalQ = intersections.reduce((s, i) => s + (i.total_queue || 0), 0);
@@ -574,34 +633,53 @@ function processPayload(payload) {
   const kpiCard = kpiAcc.closest('.kpi-card');
   kpiCard.style.borderColor = accidents.length > 0 ? 'var(--red)' : 'var(--border)';
 
-  // New violations
-  if (violations.length > lastViolationCount) {
-    const v = violations[0];
-    const plateText = v.license_plate ? ` [Plate: ${v.license_plate}]` : '';
-    addEvent('VIOLATION',
-      `${v.violation_type} — ${v.vehicle_class} @ ${v.intersection_id} (${v.speed ? v.speed+'km/h':'–'})${plateText}`,
-      new Date(v.timestamp).toLocaleTimeString()
-    );
+  // New violations: track the newest timestamp, not the list length
+  // (the payload is capped, so counts can plateau).
+  if (violations.length && violations[0].timestamp !== lastViolationTs) {
+    if (lastViolationTs !== null) {
+      const v = violations[0];
+      const plateText = v.license_plate ? ` [Plate: ${v.license_plate}]` : '';
+      addEvent('VIOLATION',
+        `${v.violation_type}: ${v.vehicle_class} @ ${v.intersection_id} (${v.speed ? v.speed+'km/h':'n/a'})${plateText}`,
+        new Date(v.timestamp).toLocaleTimeString()
+      );
+    }
+    lastViolationTs = violations[0].timestamp;
   }
-  lastViolationCount = violations.length;
 
   // New accidents
-  if (accidents.length > lastAccidentCount) {
-    const a = accidents[0];
-    addEvent('ACCIDENT',
-      `Collision @ ${a.intersection_id} — severity ${(a.severity_score*100).toFixed(0)}% — ${a.involved_vehicles} vehicles`,
-      new Date(a.timestamp).toLocaleTimeString()
-    );
+  if (accidents.length && accidents[0].timestamp !== lastAccidentTs) {
+    if (lastAccidentTs !== null) {
+      const a = accidents[0];
+      addEvent('ACCIDENT',
+        `Collision @ ${a.intersection_id}: severity ${(a.severity_score*100).toFixed(0)}%, ${a.involved_vehicles} vehicles. Emergency preemption active`,
+        new Date(a.timestamp).toLocaleTimeString()
+      );
+    }
+    lastAccidentTs = accidents[0].timestamp;
   }
-  lastAccidentCount = accidents.length;
+
+  // VMS alerts from the CongestionAgent
+  if (alerts && alerts.length && alerts[0].timestamp !== lastAlertTs) {
+    if (lastAlertTs !== null) {
+      const al = alerts[0];
+      addEvent('SIGNAL', al.message, new Date(al.timestamp).toLocaleTimeString());
+    }
+    lastAlertTs = alerts[0].timestamp;
+  }
 }
+
+let lastViolationTs = null;
+let lastAccidentTs  = null;
+let lastAlertTs     = null;
 
 // ── WebSocket ──────────────────────────────────────────────────────────────
 const pill = document.getElementById('conn-pill');
 let ws;
 
 function connect() {
-  ws = new WebSocket(`ws://${location.host}/ws/live`);
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${proto}://${location.host}/ws/live`);
 
   ws.onopen = () => {
     pill.textContent = '● LIVE';
@@ -675,5 +753,6 @@ async function sendChat() {
   }
 }
 </script>
+<script src="/static/traffic_sim.js"></script>
 </body>
 </html>

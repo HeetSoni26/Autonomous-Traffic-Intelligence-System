@@ -57,6 +57,11 @@ class ViolationDetector:
         self._GRACE_KMPH = 10.0       # tolerance before flagging
         self._logged: Set[str] = set()  # (track_id, type, approach) keys to dedup
 
+    @property
+    def logged_violations(self) -> Set[str]:
+        """Dedup keys of every violation flagged by this detector."""
+        return self._logged
+
     # ── Public API ────────────────────────────────────────────────
 
     def check_all(
@@ -148,5 +153,5 @@ class ViolationDetector:
             except Exception as exc:
                 logger.warning("ZMQ publish violation failed: {}", exc)
 
-        logger.warning("{} violation — {} {} @ {} [Plate: {}]", vtype, box.class_name,
+        logger.warning("{} violation: {} {} @ {} [Plate: {}]", vtype, box.class_name,
                        box.track_id, self.intersection_id, plate or "UNKNOWN")

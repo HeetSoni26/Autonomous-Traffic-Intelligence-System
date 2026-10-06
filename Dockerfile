@@ -1,31 +1,23 @@
-# Dockerfile for Hugging Face Spaces (Demo Mode)
-FROM python:3.10-slim
-
-# Install system dependencies required for OpenCV, EasyOCR, and SQLite
-RUN apt-get update && apt-get install -y \
-    libgl1 \
-    libglib2.0-0 \
-    sqlite3 \
-    && rm -rf /var/lib/apt/lists/*
+# TrafficIQ live demo, deployable to Hugging Face Spaces (or any container host).
+# Uses the minimal demo dependency set: API + ZeroMQ broker + multi-agent layer
+# + traffic simulator. No PyTorch / OpenCV: the simulator drives the same bus
+# the real vision nodes use, so the demo exercises the genuine pipeline.
+FROM python:3.11-slim
 
 WORKDIR /app
 
-# Copy requirements and install
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements-demo.txt .
+RUN pip install --no-cache-dir -r requirements-demo.txt
 
-# Copy application code
 COPY . .
 
-# Set environment variables for Hugging Face Spaces
-ENV HOST=0.0.0.0
-ENV PORT=7860
-# Force SIM_MODE=1 so the dashboard runs perfectly without needing a live GPU camera feed
-ENV SIM_MODE=1
-ENV PYTHONPATH=/app
+# DEMO_MODE boots the broker, every agent, and the simulator in-process.
+ENV DEMO_MODE=1 \
+    PYTHONPATH=/app \
+    ANPR_ENABLED=0 \
+    LOG_LEVEL=INFO
 
-# Hugging Face exposes port 7860
+# Hugging Face Spaces routes to port 7860; run.py also honors $PORT/$HOST.
 EXPOSE 7860
 
-# Start the FastAPI server
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "7860"]
+CMD ["python", "run.py"]
