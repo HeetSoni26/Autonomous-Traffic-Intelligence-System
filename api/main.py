@@ -366,11 +366,12 @@ async def override_signal(iid: str, req: SignalOverrideRequest):
         from fastapi import HTTPException
         raise HTTPException(404)
 
-    await _override_pub.send_string(f"signals.override {json.dumps({
-        'intersection_id': iid,
-        'active': req.active,
-        'force_phase': req.force_phase,
-    })}")
+    payload = json.dumps({
+        "intersection_id": iid,
+        "active": req.active,
+        "force_phase": req.force_phase,
+    })
+    await _override_pub.send_string(f"signals.override {payload}")
 
     return {"status": "ok", "intersection": iid, "active": req.active}
 
